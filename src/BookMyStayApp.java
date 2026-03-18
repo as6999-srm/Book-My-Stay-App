@@ -1,95 +1,143 @@
+import java.io.*;
 import java.util.*;
 
-// Main class (as you requested)
+// Main class
 public class BookMyStayApp {
 
-    // Reservation class representing a booking request
-    static class Reservation {
+    // Reservation class (Serializable)
+    static class Reservation implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private String reservationId;
         private String guestName;
         private String roomType;
 
-        public Reservation(String guestName, String roomType) {
+        public Reservation(String reservationId, String guestName, String roomType) {
+            this.reservationId = reservationId;
             this.guestName = guestName;
             this.roomType = roomType;
         }
 
-        public String getGuestName() {
-            return guestName;
+        public String getReservationId() {
+            return reservationId;
         }
 
         public String getRoomType() {
             return roomType;
         }
-//okay
+
         @Override
         public String toString() {
-            return "Reservation [Guest=" + guestName + ", RoomType=" + roomType + "]";
+            return "Reservation [ID=" + reservationId +
+                    ", Guest=" + guestName +
+                    ", RoomType=" + roomType + "]";
         }
     }
 
-    // Booking Request Queue (FIFO)
-    static class BookingRequestQueue {
-        private Queue<Reservation> queue;
+    // System State (Serializable container)
+    static class SystemState implements Serializable {
+        private static final long serialVersionUID = 1L;
 
-        public BookingRequestQueue() {
-            queue = new LinkedList<>();
+        Map<String, Integer> inventory;
+        List<Reservation> bookingHistory;
+
+        public SystemState(Map<String, Integer> inventory, List<Reservation> bookingHistory) {
+            this.inventory = inventory;
+            this.bookingHistory = bookingHistory;
+        }
+    }
+
+    // Persistence Service
+    static class PersistenceService {
+        private static final String FILE_NAME = "system_state.dat";
+
+        // Save state to file
+        public void save(SystemState state) {
+            try (ObjectOutputStream oos =
+                         new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+
+                oos.writeObject(state);
+                System.out.println("System state saved successfully.");
+
+            } catch (IOException e) {
+                System.out.println("Error saving state: " + e.getMessage());
+            }
         }
 
-        // Add booking request
-        public void addRequest(Reservation reservation) {
-            queue.offer(reservation);
-            System.out.println("Request added: " + reservation);
-        }
+        // Load state from file
+        public SystemState load() {
+            try (ObjectInputStream ois =
+                         new ObjectInputStream(new FileInputStream(FILE_NAME))) {
 
-        // View all requests in order
-        public void viewRequests() {
-            if (queue.isEmpty()) {
-                System.out.println("No booking requests in queue.");
-                return;
+                SystemState state = (SystemState) ois.readObject();
+                System.out.println("System state loaded successfully.");
+                return state;
+
+            } catch (FileNotFoundException e) {
+                System.out.println("No saved state found. Starting fresh.");
+            } catch (IOException | ClassNotFoundException e) {
+                System.out.println("Error loading state: " + e.getMessage());
             }
 
-            System.out.println("\nBooking Requests in Queue (FIFO Order):");
-            for (Reservation r : queue) {
-                System.out.println(r);
-            }
-        }
-
-        // Get next request (without removing)
-        public Reservation peekNextRequest() {
-            return queue.peek();
-        }
-
-        // Process next request (remove from queue)
-        public Reservation processNextRequest() {
-            return queue.poll();
+            return null; // safe fallback
         }
     }
 
     // Main method
     public static void main(String[] args) {
 
-        BookingRequestQueue requestQueue = new BookingRequestQueue();
+        PersistenceService persistenceService = new PersistenceService();
 
-        // Simulating booking requests
-        Reservation r1 = new Reservation("Alice", "Deluxe");
-        Reservation r2 = new Reservation("Bob", "Standard");
-        Reservation r3 = new Reservation("Charlie", "Suite");
+        // Try loading previous state
+        SystemState state = persistenceService.load();
 
-        // Adding requests (FIFO order)
-        requestQueue.addRequest(r1);
-        requestQueue.addRequest(r2);
-        requestQueue.addRequest(r3);
+        Map<String, Integer> inventory;
+        List<Reservation> bookingHistory;
 
-        // Viewing queue
-        requestQueue.viewRequests();
+        if (state != null) {
+            // Restore state
+            inventory = state.inventory;
+            bookingHistory = state.bookingHistory;
+        } else {
+            // Fresh start
+            inventory = new HashMap<>();
+            inventory.put("Standard", 2);
+            inventory.put("Deluxe", 2);
+            inventory.put("Suite", 1);
 
-        // Peek next request
-        System.out.println("\nNext request to process: " + requestQueue.peekNextRequest());
+            bookingHistory = new ArrayList<>();
+        }
 
-        // Process one request
-        System.out.println("\nProcessing request: " + requestQueue.processNextRequest());
+        // Simulate new booking
+        Reservation r1 = new Reservation("R" + (bookingHistory.size() + 1),
+                "Guest" + (bookingHistory.size() + 1),
+                "Deluxe");
 
-        // View remaining queue
-        requestQueue.viewRequests();
+        // Update system state
+        if (inventory.get(r1.getRoomType()) > 0) {
+            inventory.put(r1.getRoomType(),
+                    inventory.get(r1.getRoomType()) - 1);
+
+            bookingHistory.add(r1);
+
+            System.out.println("Booking confirmed: " + r1);
+        } else {
+            System.out.println("No rooms available.");
+        }
+
+        // Display current state
+        System.out.println("\nCurrent Inventory:");
+        for (String type : inventory.keySet()) {
+            System.out.println(type + ": " + inventory.get(type));
+        }
+
+        System.out.println("\nBooking History:");
+        for (Reservation r : bookingHistory) {
+            System.out.println(r);
+        }
+
+        // Save state before shutdown
+        SystemState newState = new SystemState(inventory, bookingHistory);
+        persistenceService.save(newState);
     }
 }
