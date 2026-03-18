@@ -1,13 +1,10 @@
-import java.io.*;
 import java.util.*;
 
 // Main class
 public class BookMyStayApp {
 
-    // Reservation class (Serializable)
-    static class Reservation implements Serializable {
-        private static final long serialVersionUID = 1L;
-
+    // Reservation (Booking Request)
+    static class Reservation {
         private String reservationId;
         private String guestName;
         private String roomType;
@@ -22,6 +19,10 @@ public class BookMyStayApp {
             return reservationId;
         }
 
+        public String getGuestName() {
+            return guestName;
+        }
+
         public String getRoomType() {
             return roomType;
         }
@@ -34,110 +35,66 @@ public class BookMyStayApp {
         }
     }
 
-    // System State (Serializable container)
-    static class SystemState implements Serializable {
-        private static final long serialVersionUID = 1L;
+    // Booking Request Queue (FIFO)
+    static class BookingRequestQueue {
+        private Queue<Reservation> queue;
 
-        Map<String, Integer> inventory;
-        List<Reservation> bookingHistory;
-
-        public SystemState(Map<String, Integer> inventory, List<Reservation> bookingHistory) {
-            this.inventory = inventory;
-            this.bookingHistory = bookingHistory;
+        public BookingRequestQueue() {
+            queue = new LinkedList<>();
         }
-    }
 
-    // Persistence Service
-    static class PersistenceService {
-        private static final String FILE_NAME = "system_state.dat";
+        // Add request (enqueue)
+        public void addRequest(Reservation reservation) {
+            queue.offer(reservation);
+            System.out.println("Request added: " + reservation);
+        }
 
-        // Save state to file
-        public void save(SystemState state) {
-            try (ObjectOutputStream oos =
-                         new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+        // View all requests (FIFO order)
+        public void viewRequests() {
+            if (queue.isEmpty()) {
+                System.out.println("No booking requests available.");
+                return;
+            }
 
-                oos.writeObject(state);
-                System.out.println("System state saved successfully.");
-
-            } catch (IOException e) {
-                System.out.println("Error saving state: " + e.getMessage());
+            System.out.println("\nBooking Requests in Queue:");
+            for (Reservation r : queue) {
+                System.out.println(r);
             }
         }
 
-        // Load state from file
-        public SystemState load() {
-            try (ObjectInputStream ois =
-                         new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+        // Peek next request (without removing)
+        public Reservation peekRequest() {
+            return queue.peek();
+        }
 
-                SystemState state = (SystemState) ois.readObject();
-                System.out.println("System state loaded successfully.");
-                return state;
-
-            } catch (FileNotFoundException e) {
-                System.out.println("No saved state found. Starting fresh.");
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Error loading state: " + e.getMessage());
-            }
-
-            return null; // safe fallback
+        // Process next request (dequeue)
+        public Reservation processRequest() {
+            return queue.poll();
         }
     }
 
     // Main method
     public static void main(String[] args) {
 
-        PersistenceService persistenceService = new PersistenceService();
+        BookingRequestQueue requestQueue = new BookingRequestQueue();
 
-        // Try loading previous state
-        SystemState state = persistenceService.load();
+        // Guests submit booking requests
+        requestQueue.addRequest(new Reservation("R101", "Alice", "Deluxe"));
+        requestQueue.addRequest(new Reservation("R102", "Bob", "Standard"));
+        requestQueue.addRequest(new Reservation("R103", "Charlie", "Suite"));
 
-        Map<String, Integer> inventory;
-        List<Reservation> bookingHistory;
+        // View all requests (FIFO order)
+        requestQueue.viewRequests();
 
-        if (state != null) {
-            // Restore state
-            inventory = state.inventory;
-            bookingHistory = state.bookingHistory;
-        } else {
-            // Fresh start
-            inventory = new HashMap<>();
-            inventory.put("Standard", 2);
-            inventory.put("Deluxe", 2);
-            inventory.put("Suite", 1);
+        // Peek next request
+        System.out.println("\nNext request (to be processed): "
+                + requestQueue.peekRequest());
 
-            bookingHistory = new ArrayList<>();
-        }
+        // Process one request
+        System.out.println("\nProcessing request: "
+                + requestQueue.processRequest());
 
-        // Simulate new booking
-        Reservation r1 = new Reservation("R" + (bookingHistory.size() + 1),
-                "Guest" + (bookingHistory.size() + 1),
-                "Deluxe");
-
-        // Update system state
-        if (inventory.get(r1.getRoomType()) > 0) {
-            inventory.put(r1.getRoomType(),
-                    inventory.get(r1.getRoomType()) - 1);
-
-            bookingHistory.add(r1);
-
-            System.out.println("Booking confirmed: " + r1);
-        } else {
-            System.out.println("No rooms available.");
-        }
-
-        // Display current state
-        System.out.println("\nCurrent Inventory:");
-        for (String type : inventory.keySet()) {
-            System.out.println(type + ": " + inventory.get(type));
-        }
-
-        System.out.println("\nBooking History:");
-        for (Reservation r : bookingHistory) {
-            System.out.println(r);
-        }
-
-        // Save state before shutdown
-        SystemState newState = new SystemState(inventory, bookingHistory);
-        persistenceService.save(newState);
+        // Remaining queue
+        requestQueue.viewRequests();
     }
 }
